@@ -1,54 +1,30 @@
-/* ***** BEGIN LICENSE BLOCK *****
- * (C)opyright 2008-2009 Aplix Corporation. anselm@aplixcorp.com
- * Version: MPL 1.1/GPL 2.0/LGPL 2.1
- *
- * The contents of this file are subject to the Mozilla Public License Version
- * 1.1 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * http://www.mozilla.org/MPL/
- *
- * Software distributed under the License is distributed on an "AS IS" basis,
- * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
- * for the specific language governing rights and limitations under the
- * License.
- * ***** END LICENSE BLOCK ***** */
-
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 
-#if defined(XULRUNNER_SDK)
-#include <npapi.h>
-#include <npupp.h>
-#include <npruntime.h>
-#elif defined(ANDROID)
-
-#undef HAVE_LONG_LONG
-#include <jni.h>
 #include <npapi.h>
 #include <npfunctions.h>
 #include <npruntime.h>
+
+/*-----------------------------------------------------------------*/
+#if defined(ANDROID)
+
+#undef HAVE_LONG_LONG
+#include <jni.h>
 #define OSCALL
+
 #define NPP_WRITE_TYPE (NPP_WriteProcPtr)
 #define NPStringText UTF8Characters
 #define NPStringLen  UTF8Length
 extern JNIEnv *pluginJniEnv;
 
+/*-----------------------------------------------------------------*/
 #elif defined(WEBKIT_DARWIN_SDK)
 
 #include <Webkit/npapi.h>
 #include <WebKit/npfunctions.h>
 #include <WebKit/npruntime.h>
 #define OSCALL
-
-#elif defined(WEBKIT_WINMOBILE_SDK) /* WebKit SDK on Windows */
-
-#ifndef PLATFORM
-#define PLATFORM(x) defined(x)
-#endif
-#include <npfunctions.h>
-#ifndef OSCALL
-#define OSCALL WINAPI
-#endif
 
 #endif
 
@@ -67,6 +43,11 @@ static void logmsg(const char *msg) {
 	}
 #elif !defined(_WINDOWS)
 	fputs(msg, stderr);
+	FILE *out = fopen("/tmp/npsimple.log", "a");
+	if(out) {
+		fputs(msg, out);
+		fclose(out);
+	}
 #else
 	FILE *out = fopen("\\npsimple.log", "a");
 	if(out) {
@@ -100,6 +81,11 @@ invoke(NPObject* obj, NPIdentifier methodName, const NPVariant *args, uint32_t a
 			logmsg("npsimple: invoke foo\n");
 			return invokeDefault(obj, args, argCount, result);
 		}
+		if(!strcmp(name, "quit")) {
+			logmsg("npsimple: invoke quit\n");
+			exit(0);
+			return invokeDefault(obj, args, argCount, result);
+		}
 		else if(!strcmp(name, "callback")) {
 			if(argCount == 1 && args[0].type == NPVariantType_Object) {
 				static NPVariant v, r;
@@ -109,7 +95,7 @@ invoke(NPObject* obj, NPIdentifier methodName, const NPVariant *args, uint32_t a
 				logmsg("npsimple: invoke callback function\n");
 				memcpy(txt, kHello, strlen(kHello));
 				STRINGN_TO_NPVARIANT(txt, strlen(kHello), v);
-				/* INT32_TO_NPVARIANT(42, v); */
+
 				if(npnfuncs->invokeDefault(inst, NPVARIANT_TO_OBJECT(args[0]), &v, 1, &r))
 					return invokeDefault(obj, args, argCount, result);
 			}
@@ -149,9 +135,9 @@ static NPClass npcRefObject = {
 /* NPP */
 
 static NPError
-nevv(NPMIMEType pluginType, NPP instance, uint16 mode, int16 argc, char *argn[], char *argv[], NPSavedData *saved) {
+create(NPMIMEType pluginType, NPP instance, uint16_t mode, int16_t argc, char *argn[], char *argv[], NPSavedData *saved) {
 	inst = instance;
-	logmsg("npsimple: new\n");
+	logmsg("npsimple: create\n");
 	return NPERR_NO_ERROR;
 }
 
@@ -165,19 +151,26 @@ destroy(NPP instance, NPSavedData **save) {
 }
 
 static NPError
+setValue(NPP instance, NPNVariable variable, void* value)
+{
+	return NPERR_GENERIC_ERROR;
+}
+
+static NPError
 getValue(NPP instance, NPPVariable variable, void *value) {
 	inst = instance;
+
 	switch(variable) {
 	default:
 		logmsg("npsimple: getvalue - default\n");
 		return NPERR_GENERIC_ERROR;
 	case NPPVpluginNameString:
 		logmsg("npsimple: getvalue - name string\n");
-		*((char **)value) = "AplixFooPlugin";
+		*((char **)value) = "testAgent";
 		break;
 	case NPPVpluginDescriptionString:
 		logmsg("npsimple: getvalue - description string\n");
-		*((char **)value) = "<a href=\"http://www.aplix.co.jp/\">AplixFooPlugin</a> plugin.";
+		*((char **)value) = "testAgent plugin.";
 		break;
 	case NPPVpluginScriptableNPObject:
 		logmsg("npsimple: getvalue - scriptable object\n");
@@ -219,17 +212,19 @@ NPError OSCALL
 NP_GetEntryPoints(NPPluginFuncs *nppfuncs) {
 	logmsg("npsimple: NP_GetEntryPoints\n");
 	nppfuncs->version       = (NP_VERSION_MAJOR << 8) | NP_VERSION_MINOR;
-	nppfuncs->newp          = nevv;
+	nppfuncs->newp          = create;
 	nppfuncs->destroy       = destroy;
 	nppfuncs->getvalue      = getValue;
+	nppfuncs->setvalue      = setValue;
 	nppfuncs->event         = handleEvent;
 	nppfuncs->setwindow     = setWindow;
+	nppfuncs->size = sizeof(NPPluginFuncs);
 
 	return NPERR_NO_ERROR;
 }
 
 #ifndef HIBYTE
-#define HIBYTE(x) ((((uint32)(x)) & 0xff00) >> 8)
+#define HIBYTE(x) ((((uint32_t)(x)) & 0xff00) >> 8)
 #endif
 
 NPError OSCALL
@@ -239,8 +234,7 @@ NP_Initialize(NPNetscapeFuncs *npnf
 #elif !defined(_WINDOWS) && !defined(WEBKIT_DARWIN_SDK)
 			, NPPluginFuncs *nppfuncs
 #endif
-			)
-{
+			) {
 	logmsg("npsimple: NP_Initialize\n");
 	if(npnf == NULL)
 		return NPERR_INVALID_FUNCTABLE_ERROR;
@@ -264,7 +258,7 @@ OSCALL NP_Shutdown() {
 char *
 NP_GetMIMEDescription(void) {
 	logmsg("npsimple: NP_GetMIMEDescription\n");
-	return "application/x-vnd-aplix-foo:.foo:anselm@aplix.co.jp";
+	return "application/x-test-agent::;";
 }
 
 NPError OSCALL /* needs to be present for WebKit based browsers */

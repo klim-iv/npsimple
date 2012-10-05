@@ -22,16 +22,23 @@
 				alert(e);
 			}
 		}
+
+		function quit() {
+			try {
+				alert(document.getElementById("pluginobj").quit());
+			}
+			catch(e) {
+				alert(e);
+			}
+		}
 	</script>
 	<p>
 		<button onclick='scriptSimple()'>Call scriptSimple()</button>
 		<button onclick='foo()'>Call foo()</button>
-		<object id="pluginobj" type="application/x-vnd-aplix-foo">Plugin FAILED to load</object>
+		<button onclick='quit()'>Call quit()</button>
+		<object id="pluginobj" type="application/x-test-agent">Plugin FAILED to load</object>
 	</p>
 
 	<p>If the plugin is working correctly, a click on the button should open a popup dialog containing <b>42</b> as value.</p>
-
-	<p>Please try a <a href="http://foo.webvm.net/test.html">more complex test using a loader</a> that demonstrates dynamic API provisioning.</p>
-
 	</body>
 </html>
