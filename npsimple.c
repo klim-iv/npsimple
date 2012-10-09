@@ -32,6 +32,10 @@ static NPObject        *so       = NULL;
 static NPNetscapeFuncs *npnfuncs = NULL;
 static NPP              inst     = NULL;
 
+/*windowless plugin*/
+int bWindowed = 0;
+
+
 /* NPN */
 
 static void logmsg(const char *msg) {
@@ -138,6 +142,8 @@ static NPError
 create(NPMIMEType pluginType, NPP instance, uint16_t mode, int16_t argc, char *argn[], char *argv[], NPSavedData *saved) {
 	inst = instance;
 	logmsg("npsimple: create\n");
+	npnfuncs->setvalue(instance, NPPVpluginWindowBool, (void *)bWindowed);
+
 	return NPERR_NO_ERROR;
 }
 
@@ -179,12 +185,10 @@ getValue(NPP instance, NPPVariable variable, void *value) {
 		npnfuncs->retainobject(so);
 		*(NPObject **)value = so;
 		break;
-#if defined(XULRUNNER_SDK)
 	case NPPVpluginNeedsXEmbed:
 		logmsg("npsimple: getvalue - xembed\n");
-		*((PRBool *)value) = PR_FALSE;
+		*((int *)value) = 1;
 		break;
-#endif
 	}
 	return NPERR_NO_ERROR;
 }

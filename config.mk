@@ -13,4 +13,11 @@ endif
 CFLAGS = -g -Wall -O2 ${INCS} ${CPPFLAGS}
 
 # compiler and linker
-CC = cc
+ifeq (${HOST},)
+	CC = cc
+else
+	ifeq (${CROSSTOOLS},)
+		CROSSTOOLS := "/opt/arm-2010q1"
+	endif
+	CC = ${CROSSTOOLS}/bin/arm-none-linux-gnueabi-gcc
+endif
